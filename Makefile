@@ -3,7 +3,7 @@ NDBFLAGS=-O2
 CPPFLAGS=-Wall -Werror
 OUTPUT=vptool
 
-CPPFILES=main.cpp vp_parser.cpp
+CPPFILES=main.cpp vp_parser.cpp operation.cpp
 LIBS=
 
 debug: $(CFILES)
@@ -14,4 +14,3 @@ release: $(CFILES)
 
 clean:
 	-rm $(OUTPUT)
-
