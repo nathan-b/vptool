@@ -3,6 +3,8 @@
 #include <list>
 #include <cstdint>
 #include <functional>
+#include <iostream>
+#include <fstream>
 
 class vp_file;
 class vp_directory;
@@ -17,6 +19,7 @@ public:
   virtual vp_file* find(const std::string& name) = 0;
   virtual std::string to_string() const = 0;
   virtual vp_directory* get_parent() const { return m_parent; }
+  virtual std::string get_path() const;
   virtual void foreach_child(std::function<void(vp_node*)> f) = 0;
 
 protected:
@@ -26,7 +29,7 @@ protected:
 class vp_directory : public vp_node
 {
 public:
-  vp_directory(const std::string&& name, vp_directory* parent);
+  vp_directory(const std::string& name, vp_directory* parent);
   ~vp_directory();
 
   virtual const std::string& get_name() const override;
@@ -44,21 +47,24 @@ private:
 class vp_file : public vp_node
 {
 public:
-  vp_file(const std::string&& name, uint32_t offset, uint32_t size, vp_directory* parent);
+  vp_file(const std::string& name,
+          uint32_t offset,
+          uint32_t size,
+          vp_directory* parent,
+          std::ifstream* filestream);
   virtual const std::string& get_name() const;
   virtual vp_file* find(const std::string& name);
   virtual std::string to_string() const;
   virtual void foreach_child(std::function<void(vp_node*)> f);
 
   std::string dump() const;
-  bool dump(const std::string&& path) const;
+  bool dump(const std::string& path) const;
 
 private:
   std::string m_name;
   uint32_t m_offset;
   uint32_t m_size;
-
-  friend class vp_index;
+  std::ifstream* m_filestream;
 };
 
 class vp_index
@@ -66,10 +72,12 @@ class vp_index
 public:
   ~vp_index();
 
-  bool parse(const std::string&& path);
-  vp_file* find(const std::string&& name) const;
+  bool parse(const std::string& path);
+  vp_file* find(const std::string& name) const;
+  std::string to_string() const;
   std::string print_index_listing() const;
 private:
   std::string m_filename;
-  vp_directory* m_root;
+  vp_directory* m_root = nullptr;
+  std::ifstream* m_filestream = nullptr;
 };
