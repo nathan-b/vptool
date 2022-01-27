@@ -1,11 +1,13 @@
 #include "vp_parser.h"
 
+#include <filesystem>
 #include <functional>
 #include <string>
 #include <list>
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <system_error>
 
 //////////////////////////////////////////////////////////////
 /// Pieces of a VP file used for parsing
@@ -118,6 +120,8 @@ std::string vp_index::print_index_listing() const
 {
   uint32_t level = 0;
   std::stringstream ss;
+
+	// Build the recursive function to apply to each node
   std::function<void(vp_node*)> print_func = [&level, &ss, &print_func](vp_node* child) {
     for (uint32_t indent = 0; indent < level; ++indent) {
       ss << "   ";
@@ -129,8 +133,25 @@ std::string vp_index::print_index_listing() const
     --level;
   };
 
-  m_root->foreach_child(print_func);
+	// Apply to root node (which will recurse down the tree depth-wise)
+	if (m_root) {
+  	m_root->foreach_child(print_func);
+	}
   return ss.str();
+}
+
+bool vp_index::dump(const std::string& dest_path) const
+{
+	if (m_root) {
+		bool retval = true;
+		// Now dump all the children using the new path
+		m_root->foreach_child([&dest_path, &retval](const vp_node* child) {
+			retval &= child->dump(dest_path);
+		});
+
+		return retval;
+	}
+	return false;
 }
 
 ////////////////////////////////////////////////////////////////
@@ -202,6 +223,34 @@ void vp_directory::foreach_child(std::function<void(vp_node*)> f)
   }
 }
 
+void vp_directory::foreach_child(std::function<void(const vp_node*)> f) const
+{
+  for (auto* child : m_children) {
+    f(child);
+  }
+}
+
+bool vp_directory::dump(const std::string& dest_path) const
+{
+	// First, create a directory for this node
+	std::filesystem::path p(dest_path);
+	p.append(m_name);
+
+	std::error_code err;
+	if (!std::filesystem::create_directories(p, err) && err.value() != 0) {
+		std::cerr << "Failed to create directory " << p << ": " << err << std::endl;
+		return false;
+	}
+
+	bool retval = true;
+	// Now dump all the children using the new path
+	foreach_child([&p, &retval](const vp_node* child) {
+		retval &= child->dump(p.string());
+	});
+
+	return retval;
+}
+
 ///////////////////////////////////////////////////////////////////
 /// vp_file methods
 
@@ -242,6 +291,12 @@ void vp_file::foreach_child(std::function<void(vp_node*)> f)
   return;
 }
 
+void vp_file::foreach_child(std::function<void(const vp_node*)> f) const
+{
+  // vp_file has no children
+  return;
+}
+
 std::string vp_file::dump() const
 {
   m_filestream->seekg(m_offset);
@@ -249,6 +304,7 @@ std::string vp_file::dump() const
     std::cerr << "Could not seek to offset " << m_offset << std::endl;
   }
 
+	// Read from the correct offset
   std::string retval;
   retval.resize(m_size);
   m_filestream->read(&retval[0], m_size);
@@ -261,16 +317,24 @@ std::string vp_file::dump() const
 
 bool vp_file::dump(const std::string& path) const
 {
+	std::filesystem::path dump_file(path);
+
+	// If we're given a directory, just create the file in the directory
+	if (std::filesystem::is_directory(dump_file)) {
+		dump_file.append(m_name);
+	}
+
   // This is not the most efficient implementation, but it should be fine
   std::string dump_buf = dump();
   if (dump_buf.empty()) {
     return false;
-  }
+	}
 
-  std::ofstream outfile(path, std::ios::out | std::ios::binary);
-
+	// Write the buffer to the file
+  std::ofstream outfile(dump_file, std::ios::out | std::ios::binary);
   outfile << dump_buf;
   bool retval = (bool)outfile;
   outfile.close();
+
   return retval;
 }

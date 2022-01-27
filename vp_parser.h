@@ -37,6 +37,9 @@ public:
 
   /// Call the given callback on every child node
   virtual void foreach_child(std::function<void(vp_node*)> f) = 0;
+  virtual void foreach_child(std::function<void(const vp_node*)> f) const = 0;
+
+  virtual bool dump(const std::string& dest_path) const = 0;
 
 protected:
   vp_directory* m_parent = nullptr;
@@ -55,8 +58,11 @@ public:
   virtual vp_file* find(const std::string& name) override;
   virtual std::string to_string() const override;
   virtual void foreach_child(std::function<void(vp_node*)> f);
+  virtual void foreach_child(std::function<void(const vp_node*)> f) const override;
 
   void add_child(vp_node* child);
+
+  virtual bool dump(const std::string& dest_path) const override;
 
 private:
   std::string m_name;
@@ -78,12 +84,13 @@ public:
   virtual vp_file* find(const std::string& name);
   virtual std::string to_string() const;
   virtual void foreach_child(std::function<void(vp_node*)> f);
+  virtual void foreach_child(std::function<void(const vp_node*)> f) const override;
 
   /// Returns a string with the text contents of the file
   std::string dump() const;
 
   /// Writes the text contents of the file to the given path
-  bool dump(const std::string& path) const;
+  virtual bool dump(const std::string& path) const override;
 
 private:
   std::string m_name;
@@ -111,6 +118,8 @@ public:
 
   // Prints the directory index for the package
   std::string print_index_listing() const;
+
+  bool dump(const std::string& dest_path) const;
 private:
   std::string m_filename;
   vp_directory* m_root = nullptr;

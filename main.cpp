@@ -37,7 +37,7 @@ bool dump_file(const vp_index* idx, const std::string& filename)
 
 bool extract_all(const vp_index* idx, const std::string& outpath)
 {
-	return false;
+	return idx->dump(outpath);
 }
 
 bool replace_file(vp_index* idx, const std::string& filename, const std::string& infilename)
