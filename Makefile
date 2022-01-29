@@ -1,6 +1,6 @@
 DBFLAGS=-g -O0 -DDEBUG
 NDBFLAGS=-O2
-CPPFLAGS=-Wall -Werror
+CPPFLAGS=-Wall -Werror -std=c++20
 OUTPUT=vptool
 
 CPPFILES=main.cpp vp_parser.cpp operation.cpp

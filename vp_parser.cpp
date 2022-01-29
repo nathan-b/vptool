@@ -1,6 +1,8 @@
 #include "vp_parser.h"
 
+#include <chrono>
 #include <cstring>
+#include <ctime>
 #include <filesystem>
 #include <functional>
 #include <string>
@@ -161,14 +163,27 @@ static inline void set_name(const std::filesystem::path& path, vp_direntry& entr
 	strncpy(entry.name, (--path.end())->c_str(), sizeof(entry.name) - 1);
 }
 
+static inline std::time_t get_timestamp(const std::filesystem::directory_entry&& file)
+{
+	// It's a little shocking how much of a faff it is to do this correctly.
+	// This requires C++20 features, since apparently before then it was
+	// unpossible to do this portably.
+	// The 32-bit timestamp will break in less than 20 years anyway, so whatevs.
+	using std::chrono::system_clock;
+	using std::chrono::file_clock;
+
+	return system_clock::to_time_t(file_clock::to_sys(file.last_write_time()));
+}
+
 static bool write_dir(const std::filesystem::path& path,
                       std::ofstream& outfile,
                       vp_header& hdr,
                       std::list<vp_direntry>& index)
 {
 	// Write current dir
-	vp_direntry direntry{0, 0, {}, 0}; // TODO preserve timestamp
+	vp_direntry direntry{0, 0, {}, 0};
 	set_name(path, direntry);
+	direntry.timestamp = (int)get_timestamp(std::filesystem::directory_entry(path));
 	index.push_back(direntry);
 
 	// We need to alphabetize the list since the fs API is random
