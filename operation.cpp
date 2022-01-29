@@ -116,19 +116,19 @@ bool operation::parse(int argc, char** argv)
 			switch (opt) {
 			case OUT_PATH:
 				if (!m_dst_path.empty()) {
-					std::cerr << "Multiple output paths specified";
+					std::cerr << "Warning: Multiple output paths specified\n";
 				}
 				m_dst_path = read_param(argc, argv, ++arg_idx);
 				break;
 			case IN_PATH:
 				if (!m_src_filename.empty()) {
-					std::cerr << "Multiple input files specified";
+					std::cerr << "Warning: Multiple input files specified\n";
 				}
 				m_src_filename = read_param(argc, argv, ++arg_idx);
 				break;
 			case PACKAGE_FILE:
 				if (!m_dst_path.empty()) {
-					std::cerr << "Multiple package files specified";
+					std::cerr << "Warning: Multiple package files specified\n";
 				}
 				m_vp_filename = read_param(argc, argv, ++arg_idx);
 				break;

@@ -89,6 +89,18 @@ int main(int argc, char** argv)
 	}
 
 	if (op.get_type() == BUILD_PACKAGE) {
+		// Since the arguments can be a little confusing, if the user did not specify
+		// a vp file but did specify an output file, we know what to do
+		std::string vpfile = op.get_package_filename();
+		if (vpfile.empty() && !op.get_dest_path().empty()) {
+			vpfile = op.get_dest_path();
+		}
+
+		if (vpfile.empty()) {
+			std::cerr << "Please specify a filename for the new package\n";
+			usage();
+			return -1;
+		}
 		// Build package operations don't parse an index file beforehand
 		if (!build_package(op.get_package_filename(), op.get_src_filename())) {
 			std::cerr << "Error building package " << op.get_package_filename() << std::endl;
