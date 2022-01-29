@@ -2,6 +2,7 @@
 #include <string>
 #include <list>
 #include <cstdint>
+#include <filesystem>
 #include <functional>
 #include <iostream>
 #include <fstream>
@@ -119,7 +120,11 @@ public:
   // Prints the directory index for the package
   std::string print_index_listing() const;
 
+  // Extracts the entire package to the given path
   bool dump(const std::string& dest_path) const;
+
+  // Builds a package file from the given path
+  bool build(const std::filesystem::path& p, const std::string& vp_filename);
 private:
   std::string m_filename;
   vp_directory* m_root = nullptr;

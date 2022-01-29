@@ -47,7 +47,24 @@ bool replace_file(vp_index* idx, const std::string& filename, const std::string&
 
 bool build_package(const std::string& vp_filename, const std::string& src_path)
 {
-	return false;
+	// Try to find the data directory
+	std::filesystem::path p(src_path);
+
+	if (std::filesystem::exists(p / "data")) {
+		p.append("data");
+	} else if (*(--p.end()) != "data") {
+		std::cerr << "Warning: could not find data directory. Assuming target of " << p << std::endl;
+	}
+
+	if (!std::filesystem::exists(p) || !std::filesystem::is_directory(p)) {
+		std::cerr << p << " does not exist or is not a directory" << std::endl;
+		return false;
+	}
+
+	std::cout << "Building package from " << p << std::endl;
+
+	vp_index idx;
+	return idx.build(p, vp_filename);
 }
 
 static void usage()

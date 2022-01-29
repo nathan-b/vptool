@@ -1,11 +1,13 @@
 #include "vp_parser.h"
 
+#include <cstring>
 #include <filesystem>
 #include <functional>
 #include <string>
 #include <list>
 #include <fstream>
 #include <iostream>
+#include <set>
 #include <sstream>
 #include <system_error>
 
@@ -152,6 +154,98 @@ bool vp_index::dump(const std::string& dest_path) const
 		return retval;
 	}
 	return false;
+}
+
+static inline void set_name(const std::filesystem::path& path, vp_direntry& entry)
+{
+	strncpy(entry.name, (--path.end())->c_str(), sizeof(entry.name) - 1);
+}
+
+static bool write_dir(const std::filesystem::path& path,
+                      std::ofstream& outfile,
+                      vp_header& hdr,
+                      std::list<vp_direntry>& index)
+{
+	// Write current dir
+	vp_direntry direntry{0, 0, {}, 0}; // TODO preserve timestamp
+	set_name(path, direntry);
+	index.push_back(direntry);
+
+	// We need to alphabetize the list since the fs API is random
+	std::set<std::filesystem::directory_entry> fset;
+
+	// Enumerate files
+	for (auto const& curr_file : std::filesystem::directory_iterator(path)) {
+		fset.insert(curr_file);
+	}
+
+	for (auto const& curr_file : fset) {
+		if (curr_file.is_directory()) {
+			// Recurse
+			if (!write_dir(curr_file.path(), outfile, hdr, index)) {
+				// This will leave a partially-written file lying around...
+				return false;
+			}
+		} else {
+			vp_direntry direntry{0, 0, {}, 0}; // TODO preserve timestamp
+			set_name(curr_file.path(), direntry);
+			direntry.size = curr_file.file_size();
+			direntry.offset = hdr.diroffset;
+			index.push_back(direntry);
+	    hdr.diroffset += direntry.size;
+			{
+				// Read the file and write it to the new package file
+				char* filebuf = new char[direntry.size];
+				std::ifstream infile(curr_file.path(), std::ios::in | std::ios::binary);
+				infile.read(filebuf, direntry.size);
+				infile.close();
+				outfile.write(filebuf, direntry.size);
+				delete[] filebuf;
+			}
+		}
+  }
+
+	// Write updir
+	vp_direntry updir{0, 0, {'.', '.'}, 0};
+	index.push_back(updir);
+
+	return true;
+}
+
+bool vp_index::build(const std::filesystem::path& p, const std::string& vp_filename)
+{
+	if (m_root || m_filestream) {
+		// This instance is already attached to a different package
+		std::cerr << "Couldn't overwrite existing package " << m_filename << std::endl;
+		return false;
+	}
+
+	std::ofstream outfile(vp_filename, std::ios::out | std::ios::binary);
+
+	if (!outfile) {
+		std::cerr << "Could not create file " << vp_filename << std::endl;
+		return false;
+	}
+
+	// Build and write the header (with bogus values)
+	vp_header hdr {{'V', 'P', 'V', 'P'}, 2, sizeof(hdr), 0};
+	std::list<vp_direntry> index;
+	outfile.write((char*)&hdr, sizeof(hdr));
+
+	if (!write_dir(p, outfile, hdr, index)) {
+		return false;
+	}
+	// Write the index
+	for (auto& direntry : index) {
+		outfile.write((char*)&direntry, sizeof(direntry));
+	}
+
+	// Now rewrite the header with the right values
+	hdr.direntries = index.size();
+	outfile.seekp(0);
+	outfile.write((char*)&hdr, sizeof(hdr));
+	outfile.close();
+	return true;
 }
 
 ////////////////////////////////////////////////////////////////
