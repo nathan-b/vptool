@@ -3,7 +3,7 @@ NDBFLAGS=-O2
 CPPFLAGS=-Wall -Werror -std=c++20
 OUTPUT=vptool
 
-CPPFILES=main.cpp vp_parser.cpp operation.cpp
+CPPFILES=main.cpp vp_parser.cpp operation.cpp scoped_tempdir.cpp
 LIBS=
 
 debug: $(CFILES)

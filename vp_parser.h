@@ -9,6 +9,7 @@
 
 class vp_file;
 class vp_directory;
+struct vp_direntry;
 
 /**
  * Abstract base class for a single direntry in the VP file.
@@ -33,6 +34,9 @@ public:
   /// (might not equal the value returned by get_name())
   virtual std::string to_string() const = 0;
 
+  /// Create a direntry struct for the node
+  virtual void to_direntry(struct vp_direntry*) const = 0;
+
   /// Return the enclosing directory, or nullptr if it's the root node
   virtual vp_directory* get_parent() const { return m_parent; }
 
@@ -52,12 +56,13 @@ protected:
 class vp_directory : public vp_node
 {
 public:
-  vp_directory(const std::string& name, vp_directory* parent);
+  vp_directory(const std::string& name, uint32_t filetime, vp_directory* parent);
   ~vp_directory();
 
   virtual const std::string& get_name() const override;
   virtual vp_file* find(const std::string& name) override;
   virtual std::string to_string() const override;
+  virtual void to_direntry(struct vp_direntry*) const override;
   virtual void foreach_child(std::function<void(vp_node*)> f);
   virtual void foreach_child(std::function<void(const vp_node*)> f) const override;
 
@@ -67,6 +72,7 @@ public:
 
 private:
   std::string m_name;
+  uint32_t m_filetime;
   std::list<vp_node*> m_children;
 };
 
@@ -79,13 +85,18 @@ public:
   vp_file(const std::string& name,
           uint32_t offset,
           uint32_t size,
+          uint32_t filetime,
           vp_directory* parent,
-          std::ifstream* filestream);
+          std::fstream* filestream);
   virtual const std::string& get_name() const;
   virtual vp_file* find(const std::string& name);
   virtual std::string to_string() const;
+  virtual void to_direntry(struct vp_direntry*) const override;
   virtual void foreach_child(std::function<void(vp_node*)> f);
   virtual void foreach_child(std::function<void(const vp_node*)> f) const override;
+
+  uint32_t get_offset() const { return m_offset; }
+  uint32_t get_size() const { return m_size; }
 
   /// Returns a string with the text contents of the file
   std::string dump() const;
@@ -93,11 +104,17 @@ public:
   /// Writes the text contents of the file to the given path
   virtual bool dump(const std::string& path) const override;
 
+  /// Write the text contents of the given file to the package
+  /// NOTE: This method does NOT update the index, nor does it do any validity
+  ///       checking of the file data. It assumes you know what you are doing!
+  bool write_file_contents(const std::filesystem::path& newfile);
+
 private:
   std::string m_name;
   uint32_t m_offset;
   uint32_t m_size;
-  std::ifstream* m_filestream;
+  uint32_t m_filetime;
+  std::fstream* m_filestream;
 };
 
 /**
@@ -117,8 +134,14 @@ public:
   // Human-friendly name for printing
   std::string to_string() const;
 
+  // Get the filename for the package file
+  std::string get_filename() const { return m_filename; }
+
   // Prints the directory index for the package
   std::string print_index_listing() const;
+
+  // Update the on-disk package index for the given node
+  bool update_index(const vp_node* node) const;
 
   // Extracts the entire package to the given path
   bool dump(const std::string& dest_path) const;
@@ -128,5 +151,5 @@ public:
 private:
   std::string m_filename;
   vp_directory* m_root = nullptr;
-  std::ifstream* m_filestream = nullptr;
+  std::fstream* m_filestream = nullptr;
 };

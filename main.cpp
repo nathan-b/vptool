@@ -1,8 +1,12 @@
 #include <iostream>
+#include <sstream>
 #include <list>
+#include <random>
+#include <filesystem>
 
 #include "vp_parser.h"
 #include "operation.h"
+#include "scoped_tempdir.h"
 
 bool dump_index(const vp_index* idx)
 {
@@ -40,11 +44,6 @@ bool extract_all(const vp_index* idx, const std::string& outpath)
 	return idx->dump(outpath);
 }
 
-bool replace_file(vp_index* idx, const std::string& filename, const std::string& infilename)
-{
-	return false;
-}
-
 bool build_package(const std::string& vp_filename, const std::string& src_path)
 {
 	// Try to find the data directory
@@ -65,6 +64,62 @@ bool build_package(const std::string& vp_filename, const std::string& src_path)
 
 	vp_index idx;
 	return idx.build(p, vp_filename);
+}
+
+bool replace_file(vp_index* idx, const std::string& filename, const std::string& infilename)
+{
+	// There's a sneaky optimization we can use here: if the updated file is
+	// the same size or smaller than the original, we can just overwrite the file
+	// data inside the package and update the size in the index. That potentially
+	// results in a bit of wastage in the file data segment, but no big deal.
+	vp_file* currfile = idx->find(filename);
+	if (!currfile) {
+		std::cerr << "Could not find " << filename << " in package!\n";
+		return false;
+	}
+
+	std::filesystem::directory_entry direntry(infilename);
+
+	if (currfile->get_size() >= direntry.file_size()) {
+		// Update the file
+		if (!currfile->write_file_contents(direntry.path())) {
+			std::cerr << "Could not write file contents to package for " << filename << std::endl;
+			return false;
+		}
+		if (!idx->update_index(currfile)) {
+			std::cerr << "Could not update index entry for " << filename << std::endl;
+			return false;
+		}
+		return true;
+	}
+
+	// vp files don't tend to be massive (I'll probably regret those words at some point)
+	// so for maximum reliability, just extract the whole thing, replace the file, and
+	// then build the new file over top of the old.
+	auto tmpd = scoped_tempdir("vptool-");
+	if (!std::filesystem::is_directory(tmpd)) {
+		std::cerr << "Could not create a temporary directory\n";
+		return false;
+	}
+
+	if (!idx->dump(tmpd)) {
+		std::cerr << "Could not dump package file to " << tmpd << std::endl;
+		return false;
+	}
+
+	// Replace the file with the new file
+	std::filesystem::path f = tmpd / currfile->get_path();
+	if (!std::filesystem::exists(f)) {
+		std::cerr << "Could not find " << filename << " at path " << f << std::endl;
+		return false;
+	}
+	if (!std::filesystem::copy_file(infilename, f, std::filesystem::copy_options::overwrite_existing)) {
+		std::cerr << "Could not copy " << infilename << " over " << f << std::endl;
+		return false;
+	}
+
+	// Repackage the whole dealio
+	return build_package(idx->get_filename(), tmpd);
 }
 
 static void usage()

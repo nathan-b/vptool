@@ -55,7 +55,7 @@ std::string vp_index::to_string() const
 bool vp_index::parse(const std::string& path)
 {
   vp_header header;
-  m_filestream = new std::ifstream(path, std::ios::in | std::ios::binary);
+  m_filestream = new std::fstream(path, std::ios::in | std::ios::out | std::ios::binary);
   m_filestream->read((char*)&header, sizeof(header));
 
   if (!*m_filestream) {
@@ -70,7 +70,7 @@ bool vp_index::parse(const std::string& path)
 
   m_filename = path;
   // Create the root node
-  m_root = new vp_directory(".", nullptr);
+  m_root = new vp_directory(".", 0, nullptr);
 
   // Seek to the index
   m_filestream->seekg(header.diroffset);
@@ -94,7 +94,7 @@ bool vp_index::parse(const std::string& path)
         }
       } else {
         // Not an updir; create a new directory node
-        vp_directory* new_dir = new vp_directory(entry.name, current);
+        vp_directory* new_dir = new vp_directory(entry.name, entry.timestamp, current);
         current->add_child(new_dir);
         current = new_dir;
       }
@@ -103,6 +103,7 @@ bool vp_index::parse(const std::string& path)
       vp_file* new_file = new vp_file(entry.name,
                                       entry.offset,
                                       entry.size,
+                                      entry.timestamp,
                                       current,
                                       m_filestream);
       current->add_child(new_file);
@@ -144,6 +145,39 @@ std::string vp_index::print_index_listing() const
   return ss.str();
 }
 
+bool vp_index::update_index(const vp_node* node) const
+{
+	const std::string target_name = node->get_name();
+	// Find the index in the file
+	vp_header header;
+	m_filestream->seekg(0);
+	m_filestream->read((char*)&header, sizeof(header));
+
+	if (!*m_filestream) {
+		std::cerr << "Error while updating index entry for " << target_name << std::endl;
+		return false;
+	}
+
+	m_filestream->seekg(header.diroffset);
+
+	// Now let's look for our file's entry
+	uint32_t curr = header.diroffset;
+	for (int i = 0; i < header.direntries; ++i, curr += sizeof(vp_direntry)) {
+		vp_direntry entry;
+		m_filestream->read((char*)&entry, sizeof(entry));
+
+		if (target_name == entry.name) {
+			// Found our entry. Update it.
+			m_filestream->seekp(curr);
+			node->to_direntry(&entry);
+			m_filestream->write((char*)&entry, sizeof(entry));
+			return true;
+		}
+	}
+
+	return false;
+}
+
 bool vp_index::dump(const std::string& dest_path) const
 {
 	if (m_root) {
@@ -156,6 +190,11 @@ bool vp_index::dump(const std::string& dest_path) const
 		return retval;
 	}
 	return false;
+}
+
+static inline void set_name(const std::string& name, vp_direntry& entry)
+{
+	strncpy(entry.name, name.c_str(), sizeof(entry.name) - 1);
 }
 
 static inline void set_name(const std::filesystem::path& path, vp_direntry& entry)
@@ -229,10 +268,15 @@ static bool write_dir(const std::filesystem::path& path,
 
 bool vp_index::build(const std::filesystem::path& p, const std::string& vp_filename)
 {
-	if (m_root || m_filestream) {
-		// This instance is already attached to a different package
-		std::cerr << "Couldn't overwrite existing package " << m_filename << std::endl;
-		return false;
+	// Overwrite existing file if necessary
+	if (m_root) {
+		delete m_root;
+		m_root = nullptr;
+	}
+	if (m_filestream) {
+		m_filestream->close();
+		delete m_filestream;
+		m_filestream = nullptr;
 	}
 
 	std::ofstream outfile(vp_filename, std::ios::out | std::ios::binary);
@@ -287,9 +331,10 @@ std::string vp_node::get_path() const
 ////////////////////////////////////////////////////////////////
 /// vp_directory methods
 
-vp_directory::vp_directory(const std::string& name, vp_directory* parent)
+vp_directory::vp_directory(const std::string& name, uint32_t filetime, vp_directory* parent)
   : vp_node(parent),
-    m_name(name)
+    m_name(name),
+    m_filetime(filetime)
 {}
 
 vp_directory::~vp_directory()
@@ -318,6 +363,15 @@ vp_file* vp_directory::find(const std::string& name)
 std::string vp_directory::to_string() const
 {
   return m_name + "/";
+}
+
+void vp_directory::to_direntry(vp_direntry* entry) const
+{
+	entry->size = 0;
+	entry->offset = 0;
+	entry->timestamp = m_filetime;
+	memset(entry->name, 0, sizeof(entry->name));
+	set_name(m_name, *entry);
 }
 
 void vp_directory::add_child(vp_node* child)
@@ -366,12 +420,14 @@ bool vp_directory::dump(const std::string& dest_path) const
 vp_file::vp_file(const std::string& name,
                  uint32_t offset,
                  uint32_t size,
+                 uint32_t filetime,
                  vp_directory* parent,
-                 std::ifstream* filestream)
+                 std::fstream* filestream)
   : vp_node(parent),
     m_name(name),
     m_offset(offset),
     m_size(size),
+		m_filetime(filetime),
     m_filestream(filestream)
 {
 }
@@ -392,6 +448,15 @@ vp_file* vp_file::find(const std::string& name)
 std::string vp_file::to_string() const
 {
   return m_name;
+}
+
+void vp_file::to_direntry(vp_direntry* entry) const
+{
+	entry->size = m_size;
+	entry->offset = m_offset;
+	entry->timestamp = m_filetime;
+	memset(entry->name, 0, sizeof(entry->name));
+	set_name(m_name, *entry);
 }
 
 void vp_file::foreach_child(std::function<void(vp_node*)> f)
@@ -441,9 +506,37 @@ bool vp_file::dump(const std::string& path) const
 
 	// Write the buffer to the file
   std::ofstream outfile(dump_file, std::ios::out | std::ios::binary);
+	if (!outfile) {
+		std::cerr << "Could not open " << dump_file << " for writing\n";
+		return false;
+	}
   outfile << dump_buf;
   bool retval = (bool)outfile;
   outfile.close();
 
   return retval;
+}
+
+bool vp_file::write_file_contents(const std::filesystem::path& newfile)
+{
+	std::ifstream infile(newfile, std::ios::in | std::ios::binary);
+	if (!infile) {
+		std::cerr << "Could not open file " << newfile << " for reading\n";
+		return false;
+	}
+
+	// Read the file in chunks and write to the filestream
+	uint32_t new_size = 0;
+	m_filestream->seekp(m_offset);
+	char* buf = new char[65535];
+	while (!infile.eof()) {
+		infile.read(buf, sizeof(buf));
+		m_filestream->write(buf, infile.gcount());
+		new_size += infile.gcount();
+	}
+
+	m_size = new_size;
+
+	infile.close();
+	return true;
 }
