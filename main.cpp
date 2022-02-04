@@ -60,7 +60,7 @@ bool build_package(const std::string& vp_filename, const std::string& src_path)
 		return false;
 	}
 
-	std::cout << "Building package from " << p << std::endl;
+	//std::cout << "Building package from " << p << std::endl;
 
 	vp_index idx;
 	return idx.build(p, vp_filename);
