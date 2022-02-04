@@ -1,7 +1,7 @@
 #include "operation.h"
 
-#include <string>
 #include <iostream>
+#include <string>
 
 static operation_type string_to_operation_type(const std::string&& arg)
 {

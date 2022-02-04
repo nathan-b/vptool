@@ -1,0 +1,13 @@
+﻿---
+BasedOnStyle: WebKit
+IndentCaseLabels: 'false'
+IndentWidth: 4
+SpaceAfterCStyleCast: 'false'
+SpaceAfterLogicalNot: 'false'
+SpaceBeforeAssignmentOperators: 'true'
+SpaceBeforeCtorInitializerColon: 'true'
+SpaceBeforeInheritanceColon: 'true'
+SpacesInCStyleCastParentheses: 'false'
+TabWidth: 4
+UseTab: ForContinuationAndIndentation
+...

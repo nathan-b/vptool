@@ -1,12 +1,12 @@
+#include <filesystem>
 #include <iostream>
-#include <sstream>
 #include <list>
 #include <random>
-#include <filesystem>
+#include <sstream>
 
-#include "vp_parser.h"
 #include "operation.h"
 #include "scoped_tempdir.h"
+#include "vp_parser.h"
 
 bool dump_index(const vp_index* idx)
 {
@@ -125,12 +125,12 @@ bool replace_file(vp_index* idx, const std::string& filename, const std::string&
 static void usage()
 {
 	std::cout << "Usage: vptool <operation> <vp_file> [options]\n"
-	          << "  Valid operations: t / dump-index             Print the index of the package file\n"
-						<< "                    d / dump-file  <-f filename>  Dump the contents of a single file in the package\n"
-						<< "                    f / extract-file <-f filename> <-o output-file>  Extract the contents of a single file to disk\n"
-						<< "                    x / extract-all  [-o output-path]  Extract the entire package to the output path (or current directory)\n"
-						<< "                    r / replace-file <-f filename> <-i input-file>  Replace the contents of a single file\n"
-						<< "                    p / build-package <-i input-path>  Build a new vp file with the contents of input-path\n";
+			  << "  Valid operations: t / dump-index             Print the index of the package file\n"
+			  << "                    d / dump-file  <-f filename>  Dump the contents of a single file in the package\n"
+			  << "                    f / extract-file <-f filename> <-o output-file>  Extract the contents of a single file to disk\n"
+			  << "                    x / extract-all  [-o output-path]  Extract the entire package to the output path (or current directory)\n"
+			  << "                    r / replace-file <-f filename> <-i input-file>  Replace the contents of a single file\n"
+			  << "                    p / build-package <-i input-path>  Build a new vp file with the contents of input-path\n";
 }
 
 int main(int argc, char** argv)
