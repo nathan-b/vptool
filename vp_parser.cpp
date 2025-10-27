@@ -66,6 +66,29 @@ bool vp_index::parse(const std::string& path)
 		return false;
 	}
 
+	// Get file size for validation
+	m_filestream->seekg(0, std::ios::end);
+	std::streampos file_size = m_filestream->tellg();
+	m_filestream->seekg(0, std::ios::beg);
+
+	// Validate header fields
+	if (header.diroffset < 0 || header.diroffset >= file_size) {
+		std::cerr << path << ": Invalid directory offset: " << header.diroffset << std::endl;
+		return false;
+	}
+
+	if (header.direntries < 0 || header.direntries > 1000000) {
+		std::cerr << path << ": Invalid number of entries: " << header.direntries << std::endl;
+		return false;
+	}
+
+	// Validate that index fits in file
+	std::streampos index_size = static_cast<std::streampos>(header.direntries) * sizeof(vp_direntry);
+	if (header.diroffset + index_size > file_size) {
+		std::cerr << path << ": Directory index extends beyond file size\n";
+		return false;
+	}
+
 	m_filename = path;
 	// Create the root node
 	m_root = new vp_directory(".", 0, nullptr);
@@ -97,7 +120,22 @@ bool vp_index::parse(const std::string& path)
 				current = new_dir;
 			}
 		} else {
-			// Not a directory
+			// Not a directory - validate file offset and size
+			if (entry.offset < 0 || entry.size < 0) {
+				std::cerr << path << ": Invalid offset or size for file " << entry.name << std::endl;
+				delete m_root;
+				m_root = nullptr;
+				return false;
+			}
+
+			std::streampos file_end = static_cast<std::streampos>(entry.offset) + static_cast<std::streampos>(entry.size);
+			if (file_end > file_size) {
+				std::cerr << path << ": File " << entry.name << " extends beyond package size\n";
+				delete m_root;
+				m_root = nullptr;
+				return false;
+			}
+
 			vp_file* new_file = new vp_file(entry.name,
 				entry.offset,
 				entry.size,
@@ -193,11 +231,13 @@ bool vp_index::dump(const std::string& dest_path) const
 static inline void set_name(const std::string& name, vp_direntry& entry)
 {
 	strncpy(entry.name, name.c_str(), sizeof(entry.name) - 1);
+	entry.name[sizeof(entry.name) - 1] = '\0';
 }
 
 static inline void set_name(const std::filesystem::path& path, vp_direntry& entry)
 {
 	strncpy(entry.name, (--path.end())->c_str(), sizeof(entry.name) - 1);
+	entry.name[sizeof(entry.name) - 1] = '\0';
 }
 
 static inline std::time_t get_timestamp(const std::filesystem::directory_entry&& file)
@@ -213,9 +253,9 @@ static inline std::time_t get_timestamp(const std::filesystem::directory_entry&&
 }
 
 static bool write_dir(const std::filesystem::path& path,
-	std::ofstream& outfile,
-	vp_header& hdr,
-	std::list<vp_direntry>& index)
+                      std::ofstream& outfile,
+                      vp_header& hdr,
+                      std::list<vp_direntry>& index)
 {
 	// Write current dir
 	vp_direntry direntry { 0, 0, {}, 0 };
@@ -528,14 +568,14 @@ bool vp_file::write_file_contents(const std::filesystem::path& newfile)
 	uint32_t new_size = 0;
 	m_filestream->seekp(m_offset);
 	char* buf = new char[65535];
-	while (!infile.eof()) {
-		infile.read(buf, sizeof(buf));
+	while (infile.read(buf, sizeof(buf)) || infile.gcount() > 0) {
 		m_filestream->write(buf, infile.gcount());
 		new_size += infile.gcount();
 	}
 
 	m_size = new_size;
 
+	delete[] buf;
 	infile.close();
 	return true;
 }

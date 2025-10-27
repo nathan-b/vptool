@@ -157,8 +157,8 @@ int main(int argc, char** argv)
 			return -1;
 		}
 		// Build package operations don't parse an index file beforehand
-		if (!build_package(op.get_package_filename(), op.get_src_filename())) {
-			std::cerr << "Error building package " << op.get_package_filename() << std::endl;
+		if (!build_package(vpfile, op.get_src_filename())) {
+			std::cerr << "Error building package " << vpfile << std::endl;
 			return -2;
 		}
 		std::cout << "Success!\n";

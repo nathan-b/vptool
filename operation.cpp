@@ -37,23 +37,23 @@ static operation_type string_to_operation_type(const std::string&& arg)
 	// dump_file or dump-file? We accept both!
 	// This implementation also accepts garbage at the end of the string, which
 	// is just a side effect
-	if (arg.substr(0, 4) == "dump") {
-		if (arg.substr(5, 4) == "file") {
+	if (arg.length() >= 4 && arg.substr(0, 4) == "dump") {
+		if (arg.length() >= 9 && arg.substr(5, 4) == "file") {
 			return DUMP_FILE;
-		} else if (arg.substr(5, 5) == "index") {
+		} else if (arg.length() >= 10 && arg.substr(5, 5) == "index") {
 			return DUMP_INDEX;
 		}
 		return INVALID_OPERATION;
-	} else if (arg.substr(0, 6) == "extract") {
-		if (arg.substr(8, 4) == "file") {
+	} else if (arg.length() >= 7 && arg.substr(0, 7) == "extract") {
+		if (arg.length() >= 12 && arg.substr(8, 4) == "file") {
 			return EXTRACT_FILE;
-		} else if (arg.substr(8, 3) == "all") {
+		} else if (arg.length() >= 11 && arg.substr(8, 3) == "all") {
 			return EXTRACT_ALL;
 		}
 		return INVALID_OPERATION;
-	} else if (arg.substr(0, 6) == "replace" && arg.substr(7, 4) == "file") {
+	} else if (arg.length() >= 12 && arg.substr(0, 7) == "replace" && arg.substr(8, 4) == "file") {
 		return REPLACE_FILE;
-	} else if (arg.substr(0, 5) == "build" && arg.substr(6, 7) == "package") {
+	} else if (arg.length() >= 13 && arg.substr(0, 5) == "build" && arg.substr(6, 7) == "package") {
 		return BUILD_PACKAGE;
 	}
 	return INVALID_OPERATION;
@@ -78,11 +78,11 @@ static option_type read_option(const std::string& arg)
 		}
 	}
 
-	if (arg.substr(2, 6) == "output" && arg.substr(9, 4) == "path") {
+	if (arg.length() >= 13 && arg.substr(2, 6) == "output" && arg.substr(9, 4) == "path") {
 		return OUT_PATH;
-	} else if (arg.substr(2, 5) == "input" && arg.substr(8, 4) == "file") {
+	} else if (arg.length() >= 12 && arg.substr(2, 5) == "input" && arg.substr(8, 4) == "file") {
 		return IN_PATH;
-	} else if (arg.substr(2, 7) == "package" && arg.substr(10, 4) == "file") {
+	} else if (arg.length() >= 14 && arg.substr(2, 7) == "package" && arg.substr(10, 4) == "file") {
 		return PACKAGE_FILE;
 	}
 	return INVALID_OPTION;
@@ -111,26 +111,38 @@ bool operation::parse(int argc, char** argv)
 		// Read the parameters for the operation
 		std::string param = read_param(argc, argv, arg_idx);
 
-		if (param[0] == '-') {
+		if (!param.empty() && param[0] == '-') {
 			option_type opt = read_option(param);
 			switch (opt) {
 			case OUT_PATH:
 				if (!m_dst_path.empty()) {
 					std::cerr << "Warning: Multiple output paths specified\n";
 				}
-				m_dst_path = read_param(argc, argv, ++arg_idx);
+				if (++arg_idx >= argc) {
+					std::cerr << "Error: -o requires an argument\n";
+					return false;
+				}
+				m_dst_path = read_param(argc, argv, arg_idx);
 				break;
 			case IN_PATH:
 				if (!m_src_filename.empty()) {
 					std::cerr << "Warning: Multiple input files specified\n";
 				}
-				m_src_filename = read_param(argc, argv, ++arg_idx);
+				if (++arg_idx >= argc) {
+					std::cerr << "Error: -i requires an argument\n";
+					return false;
+				}
+				m_src_filename = read_param(argc, argv, arg_idx);
 				break;
 			case PACKAGE_FILE:
 				if (!m_dst_path.empty()) {
 					std::cerr << "Warning: Multiple package files specified\n";
 				}
-				m_vp_filename = read_param(argc, argv, ++arg_idx);
+				if (++arg_idx >= argc) {
+					std::cerr << "Error: -f requires an argument\n";
+					return false;
+				}
+				m_vp_filename = read_param(argc, argv, arg_idx);
 				break;
 			case INVALID_OPTION:
 				return false;
