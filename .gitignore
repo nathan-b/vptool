@@ -27,3 +27,7 @@
 *.app
 vptool
 vptool_tests
+vptool_integration_tests
+
+# Test data (not checked in due to copyright)
+testdata/
